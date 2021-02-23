@@ -31,6 +31,7 @@ var (
 	profile          = kingpin.Flag("profile", "Use a specific profile from AWS credentials file.").Short('p').String()
 	limit            = kingpin.Flag("limit", "Limits total number of messages moved. No limit is set by default.").Short('l').Default("0").Int()
 	maxBatchSize     = kingpin.Flag("batch", "The maximum number of messages to move at a time").Short('b').Default("10").Int64()
+	messageID        = kingpin.Flag("messageID", "Searches the messages from the source queue and move only the message that has this specific ID.").Short('m').Default("").String()
 )
 
 func main() {
@@ -211,6 +212,12 @@ func moveMessages(sourceQueueUrl string, destinationQueueUrl string, svc *sqs.SQ
 
 		messagesToCopy := resp.Messages
 
+		if len(*messageID) > 0 {
+			messagesToCopy = filter(messagesToCopy, func(m *sqs.Message) bool {
+				return m.MessageId == messageID
+			})
+		}
+
 		if len(resp.Messages)+messagesProcessed > totalMessages {
 			messagesToCopy = resp.Messages[0 : totalMessages-messagesProcessed]
 		}
@@ -275,4 +282,14 @@ func buildVersion(version, commit, date, builtBy string) string {
 		result = fmt.Sprintf("%s\nbuilt by: %s", result, builtBy)
 	}
 	return result
+}
+
+func filter(xs []*sqs.Message, f func(*sqs.Message) bool) []*sqs.Message {
+	xsf := make([]*sqs.Message, 0)
+	for _, x := range xs {
+		if f(x) {
+			xsf = append(xsf, x)
+		}
+	}
+	return xsf
 }
